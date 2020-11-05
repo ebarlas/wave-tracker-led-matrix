@@ -1,5 +1,5 @@
 # compiler flags, including all warnings and optimization level 3
-CXXFLAGS=-Wall -O3 -Wextra -Wno-unused-parameter
+CXXFLAGS=-std=c++1z -Wall -O3 -Wextra -Wno-unused-parameter
 
 # rgb distribution vars for compiling and linking
 RGB_INCDIR=$(RGB_LIB_DISTRIBUTION)/include
