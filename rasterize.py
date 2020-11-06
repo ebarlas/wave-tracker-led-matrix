@@ -7,7 +7,9 @@ namespace = {
 }
 
 
-def rasterize(svg_file):
+def rasterize(name):
+    svg_file = f'{name}.svg'
+
     tree = ET.parse(svg_file)
     root = tree.getroot()
 
@@ -48,10 +50,12 @@ def rasterize(svg_file):
 
         subprocess.run(['rm', tmp_svg, tmp_png])
 
-    images[0].save('wave.gif', save_all=True, append_images=images[1:], optimize=False, duration=70, loop=0)
+    images[0].save(f'{name}.gif', save_all=True, append_images=images[1:], optimize=False, duration=70, loop=0)
 
-    with open('wave.bin', 'wb') as f:
+    with open(f'{name}.bin', 'wb') as f:
         f.write(bytearray(bytes))
 
 
-rasterize('wave.svg')
+rasterize('wave')
+rasterize('fadein')
+rasterize('fadeout')

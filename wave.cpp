@@ -1,14 +1,10 @@
-#include "led-matrix.h"
-
 #include <unistd.h>
 #include <signal.h>
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <memory>
-
-using rgb_matrix::RGBMatrix;
-using rgb_matrix::Canvas;
+#include "led-matrix.h"
 
 uint8_t readByte(std::istream &is) {
     char t;
@@ -43,6 +39,16 @@ struct Frame {
             }
         }
     }
+
+    void render(rgb_matrix::FrameCanvas *buffer) {
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pos = y * width + x;
+                auto &pixel = pixels[pos];
+                buffer->SetPixel(x, y, pixel.r, pixel.g, pixel.b);
+            }
+        }
+    }
 };
 
 struct Sprite {
@@ -72,27 +78,28 @@ void interruptHandler(int signo) {
     interrupted = true;
 }
 
-void renderSprite(RGBMatrix *canvas, Sprite &sprite) {
+void renderSprite(rgb_matrix::RGBMatrix *canvas, Sprite *wave, Sprite *fadeIn, Sprite *fadeOut) {
+    Sprite *sprites[] = {fadeIn, wave, fadeOut};
+    int loops[] = {1, 3, 1};
     auto buffer = canvas->CreateFrameCanvas();
-    int frame = 0;
     while (!interrupted) {
-        buffer->Clear();
-        auto &f = sprite.frames[frame];
-        for (int y = 0; y < f.height; y++) {
-            for (int x = 0; x < f.width; x++) {
-                int pos = y * f.width + x;
-                auto &pixel = f.pixels[pos];
-                buffer->SetPixel(x, y, pixel.r, pixel.g, pixel.b);
+        for (int i = 0; !interrupted && i < 3; i++) {
+            auto spr = sprites[i];
+            for (int j = 0; !interrupted && j < loops[i]; j++) {
+                for (int k = 0; !interrupted && k < spr->numFrames; k++) {
+                    auto &frame = spr->frames[k];
+                    buffer->Clear();
+                    frame.render(buffer);
+                    buffer = canvas->SwapOnVSync(buffer);
+                    usleep(60 * 1000);
+                }
             }
         }
-        buffer = canvas->SwapOnVSync(buffer);
-        frame = (frame + 1) % sprite.numFrames;
-        usleep(60 * 1000);
     }
 }
 
-RGBMatrix::Options makeOptions() {
-    RGBMatrix::Options options;
+rgb_matrix::RGBMatrix::Options makeOptions() {
+    rgb_matrix::RGBMatrix::Options options;
     options.hardware_mapping = "regular";
     options.rows = 16;
     options.cols = 32;
@@ -108,16 +115,18 @@ RGBMatrix::Options makeOptions() {
 int main(int argc, char *argv[]) {
     auto options = makeOptions();
 
-    auto *canvas = RGBMatrix::CreateFromFlags(&argc, &argv, &options);
+    auto *canvas = rgb_matrix::RGBMatrix::CreateFromFlags(&argc, &argv, &options);
     if (canvas == nullptr)
         return 1;
 
-    auto ptr = Sprite::load("wave.bin");
+    auto waveSprite = Sprite::load("wave.bin");
+    auto fadeInSprite = Sprite::load("fadein.bin");
+    auto fadeOutSprite = Sprite::load("fadeout.bin");
 
     signal(SIGTERM, interruptHandler);
     signal(SIGINT, interruptHandler);
 
-    renderSprite(canvas, *ptr);
+    renderSprite(canvas, &*waveSprite, &*fadeInSprite, &*fadeOutSprite);
 
     canvas->Clear();
     delete canvas;
