@@ -119,9 +119,9 @@ int main(int argc, char *argv[]) {
     if (canvas == nullptr)
         return 1;
 
-    auto waveSprite = Sprite::load("wave.bin");
-    auto fadeInSprite = Sprite::load("fadein.bin");
-    auto fadeOutSprite = Sprite::load("fadeout.bin");
+    auto waveSprite = Sprite::load("img/wave.bin");
+    auto fadeInSprite = Sprite::load("img/fadein.bin");
+    auto fadeOutSprite = Sprite::load("img/fadeout.bin");
 
     signal(SIGTERM, interruptHandler);
     signal(SIGINT, interruptHandler);
