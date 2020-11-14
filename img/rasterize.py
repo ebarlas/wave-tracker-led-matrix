@@ -7,36 +7,49 @@ namespace = {
 }
 
 
-def rasterize(name):
-    svg_file = f'{name}.svg'
+class Svg:
+    def __init__(self, svg_file, width, height):
+        self.tree = ET.parse(svg_file)
+        self.root = self.tree.getroot()
+        self.width = width
+        self.height = height
 
-    tree = ET.parse(svg_file)
-    root = tree.getroot()
+    def frame_count(self):
+        return len(self.root.findall('.//svg:g[@type="frame"]', namespace))
 
-    bytes = []
+    def rasterize(self, frame):
+        tmp_svg = f'tmp{frame}.svg'
+        tmp_png = f'tmp{frame}.png'
 
-    num_frames = len(root.findall('.//svg:g[@type="frame"]', namespace))
-    bytes.append(num_frames)
-
-    images = []
-
-    for n in range(1, num_frames + 1):
-        tmp_svg = f'tmp{n}.svg'
-        tmp_png = f'tmp{n}.png'
-
-        for e in root.findall(f'.//svg:g[@type="frame"]', namespace):
+        for e in self.root.findall(f'.//svg:g[@type="frame"]', namespace):
             e.set('style', 'display:none')
-        for e in root.findall(f'.//svg:g[@type="frame"][@frame="{n}"]', namespace):
+        for e in self.root.findall(f'.//svg:g[@type="frame"][@frame="{frame}"]', namespace):
             e.set('style', 'display:inline')
-        tree.write(tmp_svg)
+        self.tree.write(tmp_svg)
         subprocess.run([
             'inkscape',
             '--export-type=png',
-            '--export-width=32',
-            '--export-height=16',
+            f'--export-width={self.width}',
+            f'--export-height={self.height}',
             tmp_svg])
 
-        im = Image.open(tmp_png)
+        return Image.open(tmp_png)
+
+    def cleanup(self, frame):
+        subprocess.run(['rm', f'tmp{frame}.svg', f'tmp{frame}.png'])
+
+
+def make_bin(svg_file, name, width, height):
+    svg = Svg(svg_file, width, height)
+
+    bytes = []
+
+    num_frames = svg.frame_count()
+    bytes.append(num_frames)
+
+    images = []
+    for n in range(1, num_frames + 1):
+        im = svg.rasterize(n)
 
         bytes.append(im.width)
         bytes.append(im.height)
@@ -48,14 +61,21 @@ def rasterize(name):
 
         images.append(im)
 
-        subprocess.run(['rm', tmp_svg, tmp_png])
-
     images[0].save(f'{name}.gif', save_all=True, append_images=images[1:], optimize=False, duration=70, loop=0)
+
+    for n in range(1, num_frames + 1):
+        svg.cleanup(n)
 
     with open(f'{name}.bin', 'wb') as f:
         f.write(bytearray(bytes))
 
 
-rasterize('wave')
-rasterize('fadein')
-rasterize('fadeout')
+def main():
+    make_bin('wave.svg', 'wave', 32, 16)
+    make_bin('fadein.svg', 'fadein', 32, 16)
+    make_bin('fadeout.svg', 'fadeout', 32, 16)
+    make_bin('arrows.svg', 'arrows', 7, 8)
+
+
+if __name__ == '__main__':
+    main()
