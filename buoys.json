@@ -1,0 +1,21 @@
+{
+  "stations": [
+    {
+      "name": "Bo. Bay",
+      "id": "46013"
+    },
+    {
+      "name": "San Fran.",
+      "id": "46237"
+    },
+    {
+      "name": "Pt. Reyes",
+      "id": "46214"
+    }
+  ],
+  "command": [
+    "./wave",
+    "../rpi-rgb-led-matrix/fonts/helvR12.bdf",
+    "buoys.txt"
+  ]
+}
