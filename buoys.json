@@ -16,6 +16,6 @@
   "command": [
     "./wave",
     "../rpi-rgb-led-matrix/fonts/helvR12.bdf",
-    "buoys.txt"
+    "wave.json"
   ]
 }

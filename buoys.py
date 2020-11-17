@@ -173,14 +173,22 @@ def update_observations(conf):
 
 
 def update_message_file_restart_proc(conf, proc):
-    lines = []
+    records = []
     for station in conf['stations']:
         obs = station.get('observations')
         if obs and obs.has_latest():
-            lines.append(format_line(station, obs))
-    with open('buoys.txt', 'w') as f:
-        f.write('\n'.join(lines))
-    logger.info('updated buoys.txt')
+            latest = obs.latest()
+            record = {
+                'name': station['name'],
+                'date': latest.time.strftime("%I:%M %p").lstrip("0"),
+                'waveHeight': latest.wave_height,
+                'dominantPeriod': latest.period,
+                'waveHeightUp': obs.wave_height_up()
+            }
+            records.append(record)
+    with open('wave.json', 'w') as f:
+        json.dump({'stations': records}, f)
+    logger.info('updated wave.json')
     proc = restart_process(proc, conf['command'])
     logger.info('started process, id={}'.format(proc.pid))
     return proc
