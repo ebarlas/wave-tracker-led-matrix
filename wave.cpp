@@ -1,6 +1,8 @@
 #include <unistd.h>
 #include <signal.h>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <fstream>
 #include <utility>
 #include <vector>
@@ -8,6 +10,7 @@
 #include <algorithm>
 #include "led-matrix.h"
 #include "graphics.h"
+#include "nlohmann/json.hpp"
 
 uint8_t readByte(std::istream &is) {
     char t;
@@ -148,25 +151,39 @@ rgb_matrix::RGBMatrix::Options makeOptions() {
 }
 
 struct BuoyObs {
-    std::string message;
-    bool up;
+    std::string name;
+    std::string date;
+    double waveHeight;
+    double dominantPeriod;
+    bool waveHeightUp;
 
-    static BuoyObs load(std::istream &is) {
-        std::string message;
-        std::getline(is, message);
-        return {message.substr(1), message[0] == '+'};
-    }
-
-    static std::vector<BuoyObs> load(const char *file) {
-        std::vector<BuoyObs> vec;
-        std::ifstream is(file);
-        while (is.good()) {
-            vec.push_back(load(is));
-        }
-        is.close();
-        return vec;
+    std::string message() const {
+        std::stringstream msg;
+        msg << name << " ";
+        msg << std::fixed << std::setprecision(1) << waveHeight << "' @ ";
+        msg << std::setprecision(0) << dominantPeriod << "s at ";
+        msg << date;
+        return msg.str();
     }
 };
+
+void from_json(const nlohmann::json &j, BuoyObs &obs) {
+    j.at("name").get_to(obs.name);
+    j.at("date").get_to(obs.date);
+    j.at("waveHeight").get_to(obs.waveHeight);
+    j.at("dominantPeriod").get_to(obs.dominantPeriod);
+    j.at("waveHeightUp").get_to(obs.waveHeightUp);
+}
+
+std::vector<BuoyObs> loadObservations(const char *file) {
+    std::vector<BuoyObs> vec;
+    std::ifstream is(file);
+    nlohmann::json json;
+    is >> json;
+    json.at("stations").get_to(vec);
+    is.close();
+    return vec;
+}
 
 struct SpriteLoop {
     Sprite *sprite;
@@ -239,8 +256,8 @@ std::vector<ScrollingMessage> makeMessages(
         Sprite &arrowsSprite) {
     std::vector<ScrollingMessage> messages;
     for (auto &obs : observations) {
-        auto &frame = arrowsSprite.frames[obs.up ? 0 : 1];
-        Message message{&font, &color, obs.message};
+        auto &frame = arrowsSprite.frames[obs.waveHeightUp ? 0 : 1];
+        Message message{&font, &color, obs.message()};
         messages.emplace_back(&frame, message);
     }
     return messages;
@@ -274,7 +291,7 @@ int main(int argc, char *argv[]) {
     waveAnimation.add(&waveSprite, 3);
     waveAnimation.add(&fadeOutSprite, 1);
 
-    std::vector<BuoyObs> observations = BuoyObs::load(argv[2]);
+    std::vector<BuoyObs> observations = loadObservations(argv[2]);
     std::vector<ScrollingMessage> messages = makeMessages(observations, font, color, arrowsSprite);
 
     signal(SIGTERM, interruptHandler);
