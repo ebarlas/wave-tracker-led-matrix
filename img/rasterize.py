@@ -74,7 +74,7 @@ def main():
     make_bin('wave.svg', 'wave', 32, 16)
     make_bin('fadein.svg', 'fadein', 32, 16)
     make_bin('fadeout.svg', 'fadeout', 32, 16)
-    make_bin('arrows.svg', 'arrows', 7, 8)
+    make_bin('arrows.svg', 'arrows', 7, 10)
 
 
 if __name__ == '__main__':
