@@ -9,7 +9,7 @@ import logging.handlers
 NOAA_URL = 'https://www.ndbc.noaa.gov/data/5day2/{buoy_id}_5day.txt'
 
 # +Bodega Bay 10.2' @ 13s at 2:50 PM
-LINE_FORMAT = "{up}{name} {height:.1f}' @ {period:.0f}s at {time}"
+LINE_FORMAT = "{prefix} {name} {height:.1f}' @ {period:.0f}s at {time}"
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,13 @@ class Observations:
         my_time = self.latest_time()
         other_time = observations.latest_time()
         return my_time is not None and (other_time is None or my_time > other_time)
+
+    def wave_height_cmp_last_avg(self, hours, gt=True):
+        obs = self.observations[0]
+        t = obs.time - datetime.timedelta(hours=hours)
+        values = [x.wave_height for x in self.observations[1:] if x.time >= t]
+        avg = sum(values) / len(values)
+        return obs.wave_height > avg if gt else obs.wave_height < avg
 
 
 def init_logger(file_name):
@@ -147,10 +154,25 @@ def restart_process(proc, command):
     return subprocess.Popen(command)
 
 
+def count_compare(obs, gt=True):
+    n = 0
+    for h in [3, 6, 9]:
+        if obs.wave_height_cmp_last_avg(h, gt):
+            n += 1
+        else:
+            break
+    return n
+
+
 def format_line(station, obs):
     latest = obs.latest()
+
+    pre = count_compare(obs)
+    if not pre:
+        pre = -count_compare(obs, False)
+
     return LINE_FORMAT.format(
-        up="+" if obs.wave_height_up() else "-",
+        prefix=pre,
         name=station["name"],
         height=latest.wave_height,
         period=latest.period,
@@ -173,22 +195,14 @@ def update_observations(conf):
 
 
 def update_message_file_restart_proc(conf, proc):
-    records = []
+    lines = []
     for station in conf['stations']:
         obs = station.get('observations')
         if obs and obs.has_latest():
-            latest = obs.latest()
-            record = {
-                'name': station['name'],
-                'date': latest.time.strftime("%I:%M %p").lstrip("0"),
-                'waveHeight': latest.wave_height,
-                'dominantPeriod': latest.period,
-                'waveHeightUp': obs.wave_height_up()
-            }
-            records.append(record)
-    with open('wave.json', 'w') as f:
-        json.dump({'stations': records}, f)
-    logger.info('updated wave.json')
+            lines.append(format_line(station, obs))
+    with open('buoys.txt', 'w') as f:
+        f.write('\n'.join(lines))
+    logger.info('updated buoys.txt')
     proc = restart_process(proc, conf['command'])
     logger.info('started process, id={}'.format(proc.pid))
     return proc

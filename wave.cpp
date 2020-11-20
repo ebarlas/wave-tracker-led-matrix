@@ -1,8 +1,6 @@
 #include <unistd.h>
 #include <signal.h>
 #include <iostream>
-#include <iomanip>
-#include <sstream>
 #include <fstream>
 #include <utility>
 #include <vector>
@@ -10,7 +8,6 @@
 #include <algorithm>
 #include "led-matrix.h"
 #include "graphics.h"
-#include "nlohmann/json.hpp"
 
 uint8_t readByte(std::istream &is) {
     char t;
@@ -90,10 +87,23 @@ struct Animation {
     virtual bool render(rgb_matrix::FrameCanvas *buffer) = 0;
 };
 
-struct Message {
+struct ScrollingMessage : Animation {
+    Frame *frame;
     rgb_matrix::Font *font;
     rgb_matrix::Color *color;
     std::string message;
+    int left;
+
+    ScrollingMessage(Frame *frame, rgb_matrix::Font *font, rgb_matrix::Color *color, std::string message)
+            : frame(frame), font(font), color(color), message(std::move(message)) {}
+
+    void init(rgb_matrix::FrameCanvas *buffer) override {
+        left = buffer->width();
+    }
+
+    int sleep() override {
+        return 60;
+    }
 
     int render(rgb_matrix::FrameCanvas *buffer, int x, int y) const {
         return rgb_matrix::DrawText(
@@ -106,26 +116,10 @@ struct Message {
                 message.c_str(),
                 0);
     }
-};
-
-struct ScrollingMessage : Animation {
-    Frame *frame;
-    Message message;
-    int left;
-
-    ScrollingMessage(Frame *frame, Message message) : frame(frame), message(std::move(message)) {}
-
-    void init(rgb_matrix::FrameCanvas *buffer) override {
-        left = buffer->width();
-    }
-
-    int sleep() override {
-        return 60;
-    }
 
     bool render(rgb_matrix::FrameCanvas *buffer) override {
-        frame->render(buffer, left, 3);
-        int length = message.render(buffer, left + frame->width + 2, 0);
+        frame->render(buffer, left, 2);
+        int length = render(buffer, left + frame->width + 2, 0);
         left--;
         return left + frame->width + 2 + length < 0;
     }
@@ -151,39 +145,28 @@ rgb_matrix::RGBMatrix::Options makeOptions() {
 }
 
 struct BuoyObs {
-    std::string name;
-    std::string date;
-    double waveHeight;
-    double dominantPeriod;
-    bool waveHeightUp;
+    std::string message;
+    int prefix;
 
-    std::string message() const {
-        std::stringstream msg;
-        msg << name << " ";
-        msg << std::fixed << std::setprecision(1) << waveHeight << "' @ ";
-        msg << std::setprecision(0) << dominantPeriod << "s at ";
-        msg << date;
-        return msg.str();
+    static BuoyObs load(std::istream &is) {
+        int prefix;
+        is >> prefix;
+        is >> std::ws;
+        std::string message;
+        std::getline(is, message);
+        return {message, prefix};
+    }
+
+    static std::vector<BuoyObs> load(const char *file) {
+        std::vector<BuoyObs> vec;
+        std::ifstream is(file);
+        while (is.good()) {
+            vec.push_back(load(is));
+        }
+        is.close();
+        return vec;
     }
 };
-
-void from_json(const nlohmann::json &j, BuoyObs &obs) {
-    j.at("name").get_to(obs.name);
-    j.at("date").get_to(obs.date);
-    j.at("waveHeight").get_to(obs.waveHeight);
-    j.at("dominantPeriod").get_to(obs.dominantPeriod);
-    j.at("waveHeightUp").get_to(obs.waveHeightUp);
-}
-
-std::vector<BuoyObs> loadObservations(const char *file) {
-    std::vector<BuoyObs> vec;
-    std::ifstream is(file);
-    nlohmann::json json;
-    is >> json;
-    json.at("stations").get_to(vec);
-    is.close();
-    return vec;
-}
 
 struct SpriteLoop {
     Sprite *sprite;
@@ -254,11 +237,14 @@ std::vector<ScrollingMessage> makeMessages(
         rgb_matrix::Font &font,
         rgb_matrix::Color &color,
         Sprite &arrowsSprite) {
+    int maxPrefix = arrowsSprite.numFrames / 2;
     std::vector<ScrollingMessage> messages;
     for (auto &obs : observations) {
-        auto &frame = arrowsSprite.frames[obs.waveHeightUp ? 0 : 1];
-        Message message{&font, &color, obs.message()};
-        messages.emplace_back(&frame, message);
+        auto n = obs.prefix > 0
+                 ? std::min(maxPrefix, obs.prefix) - 1
+                 : std::min(maxPrefix, -obs.prefix) + 2;
+        auto &frame = arrowsSprite.frames[n];
+        messages.emplace_back(&frame, &font, &color, obs.message);
     }
     return messages;
 }
@@ -291,7 +277,7 @@ int main(int argc, char *argv[]) {
     waveAnimation.add(&waveSprite, 3);
     waveAnimation.add(&fadeOutSprite, 1);
 
-    std::vector<BuoyObs> observations = loadObservations(argv[2]);
+    std::vector<BuoyObs> observations = BuoyObs::load(argv[2]);
     std::vector<ScrollingMessage> messages = makeMessages(observations, font, color, arrowsSprite);
 
     signal(SIGTERM, interruptHandler);

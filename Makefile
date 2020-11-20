@@ -8,16 +8,13 @@ RGB_LIBRARY_NAME=rgbmatrix
 RGB_LIBRARY=$(RGB_LIBDIR)/lib$(RGB_LIBRARY_NAME).a
 LDFLAGS+=-L$(RGB_LIBDIR) -l$(RGB_LIBRARY_NAME) -lrt -lm -lpthread
 
-# nlohman json header-only lib
-JSON_INCDIR=$(JSON_LIB_DISTRIBUTION)/include
-
 all : wave
 
 wave : wave.o
 	${CXX} wave.o -o wave $(LDFLAGS)
 
 wave.o : wave.cpp
-	${CXX} -I${JSON_INCDIR} -I$(RGB_INCDIR) ${CXXFLAGS} -c wave.cpp
+	${CXX} -I$(RGB_INCDIR) ${CXXFLAGS} -c wave.cpp
 
 clean : 
 	rm -rf wave wave.o
