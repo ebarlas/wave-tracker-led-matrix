@@ -36,7 +36,7 @@ for i in 1..{num frames}:
 
 The `rasterize.py` script converts SVG files to bin files.
 
-* `arrows` - 3 green up arrows, 3 red down arrows
+* `arrows` - 1 green up arrow, 1 red down arrow
 * `wave` - 21 crashing wave frames
 * `fadein` - 7 water rising frames
 * `fadeout` - 6 water falling frames 
@@ -51,4 +51,8 @@ up and then endlessly renders the messages on an LED matrix.
 The `buoys.py` Python controller application reads a buoy station JSON file
 at start up and then queries a NOAA web service minutely for recent buoy 
 observations. Upon discovering a new observation, the Python controller 
-restarts the C++ LED matrix controller. 
+restarts the C++ LED matrix controller.
+
+# Build
+
+...

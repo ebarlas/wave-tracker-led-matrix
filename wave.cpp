@@ -118,7 +118,7 @@ struct ScrollingMessage : Animation {
     }
 
     bool render(rgb_matrix::FrameCanvas *buffer) override {
-        frame->render(buffer, left, 2);
+        frame->render(buffer, left, 3);
         int length = render(buffer, left + frame->width + 2, 0);
         left--;
         return left + frame->width + 2 + length < 0;
@@ -139,22 +139,19 @@ rgb_matrix::RGBMatrix::Options makeOptions() {
     options.chain_length = 1;
     options.parallel = 1;
     options.show_refresh_rate = false;
-    options.brightness = 75;
+    options.brightness = 100;
     options.hardware_mapping = "classic-pi1";
     return options;
 }
 
 struct BuoyObs {
     std::string message;
-    int prefix;
+    bool up;
 
     static BuoyObs load(std::istream &is) {
-        int prefix;
-        is >> prefix;
-        is >> std::ws;
         std::string message;
         std::getline(is, message);
-        return {message, prefix};
+        return {message.substr(1), message[0] == '+'};
     }
 
     static std::vector<BuoyObs> load(const char *file) {
@@ -237,13 +234,9 @@ std::vector<ScrollingMessage> makeMessages(
         rgb_matrix::Font &font,
         rgb_matrix::Color &color,
         Sprite &arrowsSprite) {
-    int maxPrefix = arrowsSprite.numFrames / 2;
     std::vector<ScrollingMessage> messages;
     for (auto &obs : observations) {
-        auto n = obs.prefix > 0
-                 ? std::min(maxPrefix, obs.prefix) - 1
-                 : std::min(maxPrefix, -obs.prefix) + 2;
-        auto &frame = arrowsSprite.frames[n];
+        auto &frame = arrowsSprite.frames[obs.up ? 0 : 1];
         messages.emplace_back(&frame, &font, &color, obs.message);
     }
     return messages;
