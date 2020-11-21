@@ -55,4 +55,18 @@ restarts the C++ LED matrix controller.
 
 # Build
 
-...
+Install RPI LED Matrix Library:
+
+Clone the repository and follow the installation instructions.
+
+```shell script
+git clone https://github.com/hzeller/rpi-rgb-led-matrix.git
+``` 
+
+Install Wave Tracker:
+
+```shell script
+git clone https://github.com/ebarlas/wave-tracker-led-matrix.git
+cd wave-tracker-led-matrix
+make RGB_LIB_DISTRIBUTION=/home/pi/rpi-rgb-led-matrix
+```
