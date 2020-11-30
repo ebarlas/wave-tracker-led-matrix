@@ -102,7 +102,7 @@ struct ScrollingMessage : Animation {
     }
 
     int sleep() override {
-        return 60;
+        return 55;
     }
 
     int render(rgb_matrix::FrameCanvas *buffer, int x, int y) const {
@@ -267,7 +267,7 @@ int main(int argc, char *argv[]) {
 
     SpriteAnimation waveAnimation;
     waveAnimation.add(&fadeInSprite, 1);
-    waveAnimation.add(&waveSprite, 3);
+    waveAnimation.add(&waveSprite, 4);
     waveAnimation.add(&fadeOutSprite, 1);
 
     std::vector<BuoyObs> observations = BuoyObs::load(argv[2]);

@@ -51,6 +51,42 @@ class Observations:
         return my_time is not None and (other_time is None or my_time > other_time)
 
 
+class Process:
+    def __init__(self, command):
+        self.command = command
+        self.proc = None
+
+    def start(self):
+        self.proc = subprocess.Popen(self.command)
+        logger.info('started process, id={}'.format(self.proc.pid))
+
+    def stop(self):
+        self.proc.send_signal(2)  # SIGINT
+        try:
+            self.proc.wait(5)
+            logger.info('interrupted process, id={}, status={}'.format(self.proc.pid, self.proc.returncode))
+        except subprocess.TimeoutExpired:
+            self.proc.terminate()
+            self.proc.wait()
+            logger.info('terminated  process, id={}, status={}'.format(self.proc.pid, self.proc.returncode))
+
+    def restart(self):
+        if self.proc:
+            self.stop()
+        self.start()
+
+    def check(self):
+        self.proc.poll()
+        if self.proc.returncode is None:
+            logger.info('process is running, id={}'.format(self.proc.pid))
+        else:
+            logger.error('process died, id={}, status={}'.format(self.proc.pid, self.proc.returncode))
+            self.proc = None
+
+    def dead(self):
+        return self.proc is None
+
+
 def init_logger(file_name):
     formatter = logging.Formatter('[%(asctime)s] <%(threadName)s> %(levelname)s - %(message)s')
 
@@ -134,19 +170,6 @@ def parse_observations(csv):
     return Observations(observations)
 
 
-def restart_process(proc, command):
-    if proc:
-        proc.send_signal(2)  # SIGINT
-        try:
-            proc.wait(5)
-            logger.info('interrupted process, id={}, status={}'.format(proc.pid, proc.returncode))
-        except subprocess.TimeoutExpired:
-            proc.terminate()
-            proc.wait()
-            logger.info('terminated  process, id={}, status={}'.format(proc.pid, proc.returncode))
-    return subprocess.Popen(command)
-
-
 def format_line(station, obs):
     latest = obs.latest()
     return LINE_FORMAT.format(
@@ -172,7 +195,7 @@ def update_observations(conf):
     return updated
 
 
-def update_message_file_restart_proc(conf, proc):
+def update_message_file(conf):
     lines = []
     for station in conf['stations']:
         obs = station.get('observations')
@@ -181,9 +204,14 @@ def update_message_file_restart_proc(conf, proc):
     with open('buoys.txt', 'w') as f:
         f.write('\n'.join(lines))
     logger.info('updated buoys.txt')
-    proc = restart_process(proc, conf['command'])
-    logger.info('started process, id={}'.format(proc.pid))
-    return proc
+
+
+def start_proc_if_dead(proc):
+    proc.poll()
+    if proc.returncode is None:
+        logger.info('process still running, id={}'.format(proc.pid))
+    else:
+        logger.error('process died, id={}, status={}'.format(proc.pid, proc.returncode))
 
 
 def main():
@@ -192,11 +220,18 @@ def main():
     with open('buoys.json', 'r') as f:
         conf = json.load(f)
 
-    proc = None
+    booted = False
+    proc = Process(conf['command'])
     while True:
         updated = update_observations(conf)
         if updated:
-            proc = update_message_file_restart_proc(conf, proc)
+            booted = True
+            update_message_file(conf)
+            proc.restart()
+        if booted:
+            proc.check()
+            if proc.dead():
+                proc.start()
         time.sleep(60)
 
 
