@@ -4,8 +4,8 @@ an LED matrix. It is be powered by an internet-connected Raspberry Pi Zero W and
 The system is driven by two separate software modules. First, a C++ program that scrolls an image across
 the display using GPIO pins to communicate with the LED matrix. This software is built atop the 
 [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library.
-Second, a Python controller program that downloads wave information from NOAA
-and produces a data file for the C++ program to consume. 
+Second, a Python controller program that downloads buoy observations from NOAA
+and produces a text file for the C++ program to consume. 
 
 # Requirements
 
@@ -18,6 +18,12 @@ and produces a data file for the C++ program to consume.
   * C++ 17
   * [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix)
   
+# Data Flow
+
+The diagram below outlines the flow of data between system components.
+
+![System data flow](wave-tracker-data-flow.png)
+
 # This Repo
 
 This repository contains the following:
@@ -69,4 +75,45 @@ Install Wave Tracker:
 git clone https://github.com/ebarlas/wave-tracker-led-matrix.git
 cd wave-tracker-led-matrix
 make RGB_LIB_DISTRIBUTION=/home/pi/rpi-rgb-led-matrix
+```
+
+# Run
+
+### C++ Controller
+
+Run the `wave.cpp` C++ controller application as follows:
+
+```shell script
+sudo ./wave <font file> <text file>
+```
+
+This is the suggested configuration and the default used by the Python controller:
+
+```shell script
+sudo ./wave ../rpi-rgb-led-matrix/fonts/helvR12.bdf buoys.txt
+```
+
+### Python Controller
+
+Run the `buoys.py` Python controller application as follows:
+
+```shell script
+sudo python3 buoys.py 
+```
+
+### Linux Service
+
+Install the app as a service using the steps in the raspberrypi.org systemd [reference document](https://www.raspberrypi.org/documentation/linux/usage/systemd.md).
+The `buoys.sh` and `buoys.service` files are included as a convenience.
+
+```shell script
+sudo cp buoys.service /etc/systemd/system/
+```
+
+```shell script 
+sudo systemctl start buoys.service
+```
+
+```shell script
+sudo systemctl enable buoys.service
 ```
