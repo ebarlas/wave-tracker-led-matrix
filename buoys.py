@@ -7,6 +7,7 @@ import logging
 import logging.handlers
 
 NOAA_URL = 'https://www.ndbc.noaa.gov/data/5day2/{buoy_id}_5day.txt'
+NOAA_TIMEOUT = 15
 
 # +Bodega Bay 10.2' @ 13s at 2:50 PM
 LINE_FORMAT = "{up}{name} {height:.1f}' @ {period:.0f}s at {time}"
@@ -100,7 +101,7 @@ def init_logger(file_name):
 
 def fetch_buoy_data_last5(buoy_id):
     url = NOAA_URL.format(buoy_id=buoy_id)
-    return urllib.request.urlopen(url).read().decode('utf-8')
+    return urllib.request.urlopen(url, None, NOAA_TIMEOUT).read().decode('utf-8')
 
 
 def column_index_of(headers, target):
