@@ -140,7 +140,7 @@ rgb_matrix::RGBMatrix::Options makeOptions() {
     options.parallel = 1;
     options.show_refresh_rate = false;
     options.brightness = 100;
-    options.hardware_mapping = "classic-pi1";
+    options.hardware_mapping = "regular";
     return options;
 }
 
