@@ -1,6 +1,6 @@
 # Overview
 Wave Tracker LED Matrix is a desktop digital art piece that displays buoy observation metrics on
-an LED matrix. It is be powered by an internet-connected Raspberry Pi Zero W and a 16x32 Adafruit LED matrix.
+an LED matrix. It is powered by an internet-connected Raspberry Pi Zero W and a 16x32 Adafruit LED matrix.
 The system is driven by two separate software modules. First, a C++ program that scrolls an image across
 the display using GPIO pins to communicate with the LED matrix. This software is built atop the 
 [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library.
