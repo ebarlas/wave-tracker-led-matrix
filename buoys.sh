@@ -1,3 +1,3 @@
 #!/bin/bash
 
-sudo python3 buoys.py
+python3 buoys.py
