@@ -133,7 +133,6 @@ void interruptHandler(int signo) {
 
 rgb_matrix::RGBMatrix::Options makeOptions() {
     rgb_matrix::RGBMatrix::Options options;
-    options.hardware_mapping = "regular";
     options.rows = 16;
     options.cols = 32;
     options.chain_length = 1;
@@ -243,18 +242,18 @@ std::vector<ScrollingMessage> makeMessages(
 }
 
 int main(int argc, char *argv[]) {
+    rgb_matrix::Font font;
+    if (!font.LoadFont(argv[1])) {
+        std::cerr << "Unable to load font: " << argv[1] << std::endl;
+        return 1;
+    }
+
     auto options = makeOptions();
     rgb_matrix::RuntimeOptions runtimeOptions;
 
     auto *canvas = rgb_matrix::RGBMatrix::CreateFromOptions(options, runtimeOptions);
     if (canvas == nullptr) {
         std::cerr << "Unable to create canvas" << std::endl;
-        return 1;
-    }
-
-    rgb_matrix::Font font;
-    if (!font.LoadFont(argv[1])) {
-        std::cerr << "Unable to load font: " << argv[1] << std::endl;
         return 1;
     }
 

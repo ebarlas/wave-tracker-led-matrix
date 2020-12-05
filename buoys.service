@@ -2,12 +2,12 @@
 Description=Wave Tracker LED Matrix
 
 [Service]
-ExecStart=/home/pi/wave-tracker-led-matrix/buoys.sh
-WorkingDirectory=/home/pi/wave-tracker-led-matrix
+ExecStart=/root/wave-tracker-led-matrix/buoys.sh
+WorkingDirectory=/root/wave-tracker-led-matrix
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
-User=pi
+User=root
 
 [Install]
 WantedBy=multi-user.target

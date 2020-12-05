@@ -13,9 +13,9 @@ and produces a text file for the C++ program to consume.
   * Raspberry Pi Zero W
   * Adafruit 16 x 32 LED Matrix
 * Software
-  * Raspbian or Raspberry Pi OS
-  * Python 3
-  * C++ 17
+  * DietPi OS
+  * Python 3.5+
+  * C++ 17+
   * [rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix)
   
 # Data Flow
@@ -67,6 +67,8 @@ Clone the repository and follow the installation instructions.
 
 ```shell script
 git clone https://github.com/hzeller/rpi-rgb-led-matrix.git
+cd rpi-rgb-led-matrix/
+make
 ``` 
 
 Install Wave Tracker:
@@ -74,7 +76,7 @@ Install Wave Tracker:
 ```shell script
 git clone https://github.com/ebarlas/wave-tracker-led-matrix.git
 cd wave-tracker-led-matrix
-make RGB_LIB_DISTRIBUTION=/home/pi/rpi-rgb-led-matrix
+make RGB_LIB_DISTRIBUTION=../rpi-rgb-led-matrix
 ```
 
 # Run
@@ -84,13 +86,13 @@ make RGB_LIB_DISTRIBUTION=/home/pi/rpi-rgb-led-matrix
 Run the `wave.cpp` C++ controller application as follows:
 
 ```shell script
-sudo ./wave <font file> <text file>
+./wave <font file> <text file>
 ```
 
 This is the suggested configuration and the default used by the Python controller:
 
 ```shell script
-sudo ./wave ../rpi-rgb-led-matrix/fonts/helvR12.bdf buoys.txt
+./wave ../rpi-rgb-led-matrix/fonts/helvR12.bdf buoys.txt
 ```
 
 ### Python Controller
@@ -98,7 +100,7 @@ sudo ./wave ../rpi-rgb-led-matrix/fonts/helvR12.bdf buoys.txt
 Run the `buoys.py` Python controller application as follows:
 
 ```shell script
-sudo python3 buoys.py 
+python3 buoys.py
 ```
 
 ### Linux Service
@@ -107,13 +109,13 @@ Install the app as a service using the steps in the raspberrypi.org systemd [ref
 The `buoys.sh` and `buoys.service` files are included as a convenience.
 
 ```shell script
-sudo cp buoys.service /etc/systemd/system/
+cp buoys.service /etc/systemd/system/
 ```
 
 ```shell script 
-sudo systemctl start buoys.service
+systemctl start buoys.service
 ```
 
 ```shell script
-sudo systemctl enable buoys.service
+systemctl enable buoys.service
 ```
