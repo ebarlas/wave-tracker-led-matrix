@@ -22,7 +22,7 @@ and produces a text file for the C++ program to consume.
 
 The diagram below outlines the flow of data between system components.
 
-![System data flow](wave-tracker-data-flow.png)
+![System data flow](docs/wave-tracker-data-flow.png)
 
 # This Repo
 
@@ -119,3 +119,11 @@ systemctl start buoys.service
 ```shell script
 systemctl enable buoys.service
 ```
+
+### Wave Art
+
+The following is wave frame 10 of 21 in the Inkscape design studio and the LED matrix. 
+
+![System data flow](docs/led-pixel-svg-small.png)
+
+![System data flow](docs/led-pixel-photo-small.jpg)
