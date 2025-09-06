@@ -1,16 +1,16 @@
 {
   "stations": [
     {
-      "name": "Bo. Bay",
-      "id": "46013"
-    },
-    {
-      "name": "San Fran.",
+      "name": "San Fran. 6NM West",
       "id": "46237"
     },
     {
-      "name": "Pt. Reyes",
-      "id": "46214"
+      "name": "San Fran. 18NM West",
+      "id": "46026"
+    },
+    {
+      "name": "West Cal. 357NM West",
+      "id": "46059"
     }
   ],
   "command": [

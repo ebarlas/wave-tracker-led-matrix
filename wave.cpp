@@ -87,22 +87,71 @@ struct Animation {
     virtual bool render(rgb_matrix::FrameCanvas *buffer) = 0;
 };
 
+struct BuoyObs {
+    std::string name;
+    bool up;
+    int waveHeights[32];
+
+    static BuoyObs load(std::istream &is) {
+        BuoyObs obs;
+        std::string line;
+        std::getline(is, line);
+        obs.up = line[0] == '+';
+        std::getline(is, line);
+        obs.name = line;
+        for (int &waveHeight: obs.waveHeights) {
+            std::getline(is, line);
+            waveHeight = std::stoi(line);
+        }
+        return obs;
+    }
+
+    static std::vector<BuoyObs> load(const char *file) {
+        std::ifstream is(file);
+        std::string line;
+        std::getline(is, line);
+        int buoys = std::stoi(line);
+        std::vector<BuoyObs> vec(buoys);
+        for (int i = 0; i < buoys; i++) {
+            vec[i] = load(is);
+        }
+        is.close();
+        return vec;
+    }
+};
+
+
 struct ScrollingMessage : Animation {
     Frame *frame;
     rgb_matrix::Font *font;
     rgb_matrix::Color *color;
-    std::string message;
+    BuoyObs *obs;
     int left;
+    int idleTicks;
 
-    ScrollingMessage(Frame *frame, rgb_matrix::Font *font, rgb_matrix::Color *color, std::string message)
-            : frame(frame), font(font), color(color), message(std::move(message)) {}
+    const int idlePeriod = 60;
+    const int margin = 2;
+    const int gridWidth = 32;
+    const int gridHeight = 16;
+
+    ScrollingMessage(Frame *frame, rgb_matrix::Font *font, rgb_matrix::Color *color, BuoyObs *obs)
+            : frame(frame), font(font), color(color), obs(obs), left(0), idleTicks(0) {}
 
     void init(rgb_matrix::FrameCanvas *buffer) override {
         left = buffer->width();
+        idleTicks = 0;
     }
 
     int sleep() override {
-        return 55;
+        return 50;
+    }
+
+    void drawGrid(rgb_matrix::FrameCanvas *buffer, int gridLeft) const {
+        for (int i = 0; i < gridWidth; i++) {
+            for (int j = 0; j < obs->waveHeights[i]; j++) {
+                buffer->SetPixel(gridLeft + i, gridHeight - 1 - j, color->r, color->g, color->b);
+            }
+        }
     }
 
     int render(rgb_matrix::FrameCanvas *buffer, int x, int y) const {
@@ -113,15 +162,22 @@ struct ScrollingMessage : Animation {
                 y + font->baseline(),
                 *color,
                 nullptr,
-                message.c_str(),
+                obs->name.c_str(),
                 0);
     }
 
     bool render(rgb_matrix::FrameCanvas *buffer) override {
         frame->render(buffer, left, 3);
-        int length = render(buffer, left + frame->width + 2, 0);
-        left--;
-        return left + frame->width + 2 + length < 0;
+        int textLeft = left + frame->width + margin;
+        int textWidth = render(buffer, textLeft, 0);
+        int gridLeft = textLeft + textWidth + margin;
+        drawGrid(buffer, gridLeft);
+        if (gridLeft == 0 && idleTicks < idlePeriod) {
+            idleTicks++;
+        } else {
+            left--;
+        }
+        return left + frame->width + margin + textWidth + margin + gridWidth < 0;
     }
 };
 
@@ -142,27 +198,6 @@ rgb_matrix::RGBMatrix::Options makeOptions() {
     options.hardware_mapping = "regular";
     return options;
 }
-
-struct BuoyObs {
-    std::string message;
-    bool up;
-
-    static BuoyObs load(std::istream &is) {
-        std::string message;
-        std::getline(is, message);
-        return {message.substr(1), message[0] == '+'};
-    }
-
-    static std::vector<BuoyObs> load(const char *file) {
-        std::vector<BuoyObs> vec;
-        std::ifstream is(file);
-        while (is.good()) {
-            vec.push_back(load(is));
-        }
-        is.close();
-        return vec;
-    }
-};
 
 struct SpriteLoop {
     Sprite *sprite;
@@ -234,9 +269,9 @@ std::vector<ScrollingMessage> makeMessages(
         rgb_matrix::Color &color,
         Sprite &arrowsSprite) {
     std::vector<ScrollingMessage> messages;
-    for (auto &obs : observations) {
+    for (auto &obs: observations) {
         auto &frame = arrowsSprite.frames[obs.up ? 0 : 1];
-        messages.emplace_back(&frame, &font, &color, obs.message);
+        messages.emplace_back(&frame, &font, &color, &obs);
     }
     return messages;
 }

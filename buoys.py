@@ -9,9 +9,6 @@ import logging.handlers
 NOAA_URL = 'https://www.ndbc.noaa.gov/data/5day2/{buoy_id}_5day.txt'
 NOAA_TIMEOUT = 15
 
-# +Bodega Bay 10.2' @ 13s at 2:50 PM
-LINE_FORMAT = "{up}{name} {height:.1f}' @ {period:.0f}s at {time}"
-
 logger = logging.getLogger(__name__)
 
 
@@ -20,6 +17,12 @@ class Observation:
         self.time = time
         self.wave_height = wave_height
         self.period = period
+
+    def truncate_time(self):
+        return self.time.replace(minute=0, second=0, microsecond=0)
+
+    def copy_at_time(self, time):
+        return Observation(time, self.wave_height, self.period)
 
     def __repr__(self):
         t = self.time.strftime('%Y-%m-%dT%H:%M')
@@ -50,6 +53,28 @@ class Observations:
         my_time = self.latest_time()
         other_time = observations.latest_time()
         return my_time is not None and (other_time is None or my_time > other_time)
+
+    def one_per_hour(self, limit=32):
+        if not self.has_latest():
+            return None
+        result = [self.observations[0]]
+        obs_index = 1
+        while len(result) < limit:
+            prev_tt = result[-1].truncate_time()
+            next_tt = prev_tt - datetime.timedelta(hours=1)
+            if obs_index == len(self.observations):
+                result.append(result[-1].copy_at_time(next_tt))
+                continue
+            obs = self.observations[obs_index]
+            obs_tt = obs.truncate_time()
+            if obs_tt == next_tt:
+                result.append(obs)
+                obs_index += 1
+            elif obs_tt < next_tt:
+                result.append(result[-1].copy_at_time(next_tt)) # filler
+            else:
+                obs_index += 1 # duplicate
+        return reversed(result)
 
 
 class Process:
@@ -171,16 +196,6 @@ def parse_observations(csv):
     return Observations(observations)
 
 
-def format_line(station, obs):
-    latest = obs.latest()
-    return LINE_FORMAT.format(
-        up="+" if obs.wave_height_up() else "-",
-        name=station["name"],
-        height=latest.wave_height,
-        period=latest.period,
-        time=latest.time.strftime("%I:%M %p").lstrip("0"))
-
-
 def update_observations(conf):
     updated = False
     for station in conf['stations']:
@@ -197,11 +212,16 @@ def update_observations(conf):
 
 
 def update_message_file(conf):
-    lines = []
-    for station in conf['stations']:
-        obs = station.get('observations')
-        if obs and obs.has_latest():
-            lines.append(format_line(station, obs))
+    targets = [s for s in conf['stations'] if 'observations' in s and s['observations'].has_latest()]
+    lines = [f'{len(targets)}']
+    for station in targets:
+        obss = station.get('observations')
+        obs = obss.latest()
+        dt = f'{obs.time.month}/{obs.time.day} at {obs.time.strftime("%I:%M %p").lstrip("0")}'
+        lines.append('+' if obss.wave_height_up() else '-')
+        lines.append(f'{station["name"]} {obs.wave_height:.1f}\' @ {round(obs.period)}s on {dt}')
+        for obs in obss.one_per_hour():
+            lines.append(f'{round(obs.wave_height)}')
     with open('buoys.txt', 'w') as f:
         f.write('\n'.join(lines))
     logger.info('updated buoys.txt')
