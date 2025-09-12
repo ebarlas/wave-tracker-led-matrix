@@ -6,8 +6,22 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <random>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <string>
 #include "led-matrix.h"
 #include "graphics.h"
+
+constexpr int COLUMNS = 32;
+constexpr int ROWS = 16;
+
+int randomColumn() {
+    static std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<int> dist(0, COLUMNS - 1);
+    return dist(rng);
+}
 
 uint8_t readByte(std::istream &is) {
     char t;
@@ -74,10 +88,9 @@ struct Sprite {
 
     static Sprite load(const char *file) {
         Sprite sprite;
-        std::ifstream is(file);
+        std::ifstream is(file, std::ios::binary);
         sprite.load(is);
-        is.close();
-        return sprite;
+        return sprite; // RAII closes file
     }
 };
 
@@ -90,7 +103,7 @@ struct Animation {
 struct BuoyObs {
     std::string name;
     bool up;
-    int waveHeights[32];
+    std::array<double, COLUMNS> waveHeights;
 
     static BuoyObs load(std::istream &is) {
         BuoyObs obs;
@@ -99,9 +112,9 @@ struct BuoyObs {
         obs.up = line[0] == '+';
         std::getline(is, line);
         obs.name = line;
-        for (int &waveHeight: obs.waveHeights) {
+        for (auto &waveHeight: obs.waveHeights) {
             std::getline(is, line);
-            waveHeight = std::stoi(line);
+            waveHeight = std::stof(line);
         }
         return obs;
     }
@@ -127,31 +140,16 @@ struct ScrollingMessage : Animation {
     rgb_matrix::Color *color;
     BuoyObs *obs;
     int left;
-    int idleTicks;
-
-    const int idlePeriod = 60;
-    const int margin = 2;
-    const int gridWidth = 32;
-    const int gridHeight = 16;
 
     ScrollingMessage(Frame *frame, rgb_matrix::Font *font, rgb_matrix::Color *color, BuoyObs *obs)
-            : frame(frame), font(font), color(color), obs(obs), left(0), idleTicks(0) {}
+            : frame(frame), font(font), color(color), obs(obs), left(0) {}
 
     void init(rgb_matrix::FrameCanvas *buffer) override {
         left = buffer->width();
-        idleTicks = 0;
     }
 
     int sleep() override {
         return 50;
-    }
-
-    void drawGrid(rgb_matrix::FrameCanvas *buffer, int gridLeft) const {
-        for (int i = 0; i < gridWidth; i++) {
-            for (int j = 0; j < obs->waveHeights[i]; j++) {
-                buffer->SetPixel(gridLeft + i, gridHeight - 1 - j, color->r, color->g, color->b);
-            }
-        }
     }
 
     int render(rgb_matrix::FrameCanvas *buffer, int x, int y) const {
@@ -168,16 +166,186 @@ struct ScrollingMessage : Animation {
 
     bool render(rgb_matrix::FrameCanvas *buffer) override {
         frame->render(buffer, left, 3);
-        int textLeft = left + frame->width + margin;
-        int textWidth = render(buffer, textLeft, 0);
-        int gridLeft = textLeft + textWidth + margin;
-        drawGrid(buffer, gridLeft);
-        if (gridLeft == 0 && idleTicks < idlePeriod) {
-            idleTicks++;
-        } else {
-            left--;
+        int length = render(buffer, left + frame->width + 2, 0);
+        left--;
+        return left + frame->width + 2 + length < 0;
+    }
+};
+
+struct WaveHeightChart : Animation {
+    enum class DropState {
+        INIT,
+        FALLING,
+        EXITING
+    };
+
+    struct Drop {
+        DropState state;
+        int y;
+        const double factor;
+
+        explicit Drop(double factor) : state(DropState::INIT), y(0), factor(factor) {}
+    };
+
+    struct Column {
+        std::vector<Drop> drops;
+
+        void init(int count, double terminalFactor) {
+            drops.clear();
+            drops.reserve(count);
+            for (int i = 0; i < count; i++) {
+                drops.emplace_back(i < count - 1 ? 1.0 : terminalFactor);
+            };
         }
-        return left + frame->width + margin + textWidth + margin + gridWidth < 0;
+
+        void advanceDropsInMotion() {
+            for (int i = 0; i < drops.size(); i++) {
+                auto &drop = drops[i];
+                if (drop.state == DropState::EXITING || (drop.state == DropState::FALLING && drop.y < ROWS - 1 - i)) {
+                    drop.y++;
+                }
+            }
+        }
+
+        void transitionNextDrop(DropState from, DropState to) {
+            auto it = std::find_if(
+                    drops.begin(),
+                    drops.end(),
+                    [from](auto &d) { return d.state == from; });
+            if (it != drops.end()) {
+                it->state = to;
+            }
+        }
+
+        void nextFallingDrop() {
+            transitionNextDrop(DropState::INIT, DropState::FALLING);
+        }
+
+        void nextExitingDrop() {
+            transitionNextDrop(DropState::FALLING, DropState::EXITING);
+        }
+
+        [[nodiscard]] bool allDropsCreated() const {
+            return std::all_of(
+                    drops.begin(),
+                    drops.end(),
+                    [](const Drop &d) { return d.state != DropState::INIT; });
+        }
+
+        [[nodiscard]] bool allDropsExiting() const {
+            return std::all_of(
+                    drops.begin(),
+                    drops.end(),
+                    [](const Drop &d) { return d.state == DropState::EXITING; });
+        }
+
+        [[nodiscard]] bool allDropsExited() const {
+            return std::all_of(
+                    drops.begin(),
+                    drops.end(),
+                    [](const Drop &d) { return d.state == DropState::EXITING && d.y >= ROWS; });
+        }
+
+        void renderDrops(int x, rgb_matrix::FrameCanvas *buffer) {
+            for (const auto &drop: drops) {
+                if (drop.state != DropState::INIT) {
+                    int blue = static_cast<int>(255 * drop.factor);
+                    buffer->SetPixel(x, drop.y, 0, 0, blue);
+                }
+            }
+        }
+    };
+
+    struct Grid {
+        std::array<Column, COLUMNS> columns;
+
+        void init(const std::array<double, COLUMNS> &heights) {
+            for (int x = 0; x < COLUMNS; x++) {
+                double h = heights[x];
+                int numColumns = static_cast<int>(std::ceil(h));
+                double factor = h - std::floor(h);
+                columns[x].init(numColumns, factor == 0 ? 1.0 : factor);
+            }
+        }
+
+        void advanceDropsInMotion() {
+            for (auto &column: columns) {
+                column.advanceDropsInMotion();
+            }
+        }
+
+        [[nodiscard]] bool allDropsCreated() const {
+            return std::all_of(
+                    columns.begin(),
+                    columns.end(),
+                    [](const Column &c) { return c.allDropsCreated(); });
+        }
+
+        [[nodiscard]] bool allDropsExiting() const {
+            return std::all_of(
+                    columns.begin(),
+                    columns.end(),
+                    [](const Column &c) { return c.allDropsExiting(); });
+        }
+
+        [[nodiscard]] bool allDropsExited() const {
+            return std::all_of(
+                    columns.begin(),
+                    columns.end(),
+                    [](const Column &c) { return c.allDropsExited(); });
+        }
+
+        void addRandomDrop() {
+            int c = randomColumn();
+            while (columns[c].allDropsCreated()) {
+                c = (c + 1) % COLUMNS;
+            }
+            columns[c].nextFallingDrop();
+        }
+
+        void exitRandomDrop() {
+            int c = randomColumn();
+            while (columns[c].allDropsExiting()) {
+                c = (c + 1) % COLUMNS;
+            }
+            columns[c].nextExitingDrop();
+        }
+
+        void renderDrops(rgb_matrix::FrameCanvas *buffer) {
+            for (int x = 0; x < COLUMNS; x++) {
+                columns[x].renderDrops(x, buffer);
+            }
+        }
+    };
+
+    static constexpr int SLEEP_DURATION_TICKS = 100;
+
+    const BuoyObs *obs;
+    Grid grid;
+    int sleepTicks;
+
+    explicit WaveHeightChart(BuoyObs *obs) : obs(obs), sleepTicks(0) {}
+
+    void init(rgb_matrix::FrameCanvas *buffer) override {
+        sleepTicks = 0;
+        grid.init(obs->waveHeights);
+    }
+
+    int sleep() override {
+        return 20;
+    }
+
+    bool render(rgb_matrix::FrameCanvas *buffer) override {
+        grid.advanceDropsInMotion();
+        if (!grid.allDropsCreated()) {
+            grid.addRandomDrop();
+        } else if (sleepTicks < SLEEP_DURATION_TICKS) {
+            sleepTicks++;
+        } else if (!grid.allDropsExiting()) {
+            grid.exitRandomDrop();
+        }
+        grid.renderDrops(buffer);
+        return grid.allDropsExited();
     }
 };
 
@@ -245,7 +413,10 @@ struct SpriteAnimation : Animation {
     }
 };
 
-void renderLoop(std::vector<Animation *> &animations, rgb_matrix::RGBMatrix *canvas, rgb_matrix::FrameCanvas *buffer) {
+void renderLoop(
+        std::vector<std::unique_ptr<Animation>> &animations,
+        rgb_matrix::RGBMatrix *canvas,
+        rgb_matrix::FrameCanvas *buffer) {
     auto it = animations.begin();
     (*it)->init(buffer);
     while (!interrupted) {
@@ -261,19 +432,6 @@ void renderLoop(std::vector<Animation *> &animations, rgb_matrix::RGBMatrix *can
         }
         usleep((*it)->sleep() * 1000);
     }
-}
-
-std::vector<ScrollingMessage> makeMessages(
-        std::vector<BuoyObs> &observations,
-        rgb_matrix::Font &font,
-        rgb_matrix::Color &color,
-        Sprite &arrowsSprite) {
-    std::vector<ScrollingMessage> messages;
-    for (auto &obs: observations) {
-        auto &frame = arrowsSprite.frames[obs.up ? 0 : 1];
-        messages.emplace_back(&frame, &font, &color, &obs);
-    }
-    return messages;
 }
 
 int main(int argc, char *argv[]) {
@@ -299,23 +457,25 @@ int main(int argc, char *argv[]) {
     auto fadeOutSprite = Sprite::load("img/fadeout.bin");
     auto arrowsSprite = Sprite::load("img/arrows.bin");
 
-    SpriteAnimation waveAnimation;
-    waveAnimation.add(&fadeInSprite, 1);
-    waveAnimation.add(&waveSprite, 4);
-    waveAnimation.add(&fadeOutSprite, 1);
+    auto waveAnimation = std::make_unique<SpriteAnimation>();
+    waveAnimation->add(&fadeInSprite, 1);
+    waveAnimation->add(&waveSprite, 4);
+    waveAnimation->add(&fadeOutSprite, 1);
+
+    std::vector<std::unique_ptr<Animation>> animations;
+    animations.push_back(std::move(waveAnimation));
 
     std::vector<BuoyObs> observations = BuoyObs::load(argv[2]);
-    std::vector<ScrollingMessage> messages = makeMessages(observations, font, color, arrowsSprite);
+    for (auto &obs: observations) {
+        auto &frame = arrowsSprite.frames[obs.up ? 0 : 1];
+        animations.push_back(std::make_unique<ScrollingMessage>(&frame, &font, &color, &obs));
+        animations.push_back(std::make_unique<WaveHeightChart>(&obs));
+    }
 
     signal(SIGTERM, interruptHandler);
     signal(SIGINT, interruptHandler);
 
     auto buffer = canvas->CreateFrameCanvas();
-
-    std::vector<Animation *> animations;
-    animations.push_back(&waveAnimation);
-    std::for_each(messages.begin(), messages.end(), [&animations](ScrollingMessage &m) { animations.push_back(&m); });
-
     renderLoop(animations, canvas, buffer);
 
     canvas->Clear();

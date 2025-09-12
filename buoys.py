@@ -221,7 +221,7 @@ def update_message_file(conf):
         lines.append('+' if obss.wave_height_up() else '-')
         lines.append(f'{station["name"]} {obs.wave_height:.1f}\' @ {round(obs.period)}s on {dt}')
         for obs in obss.one_per_hour():
-            lines.append(f'{round(obs.wave_height)}')
+            lines.append(f'{obs.wave_height:.1f}')
     with open('buoys.txt', 'w') as f:
         f.write('\n'.join(lines))
     logger.info('updated buoys.txt')
